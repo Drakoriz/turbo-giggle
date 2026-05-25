@@ -12,7 +12,10 @@ st.title("Metro Paris")
 @st.cache_resource(show_spinner="Chargement du graphe...")
 def load_graph():
     base = Path(__file__).resolve().parent
-    preprocessed = load_preprocessed_gtfs(base / "GTFS_preprocessed.json")
+    gz_path = base / "GTFS_preprocessed.json.gz" # Prend moins d'espace disque mais est plus lent à charger
+    json_path = base / "GTFS_preprocessed.json" # Plus rapide à charger mais prend beaucoup plus d'espace disque.
+    input_path = gz_path if gz_path.exists() else json_path
+    preprocessed = load_preprocessed_gtfs(input_path)
     return Graph.from_preprocessed(preprocessed)
 
 g = load_graph()

@@ -2,9 +2,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+import gzip
 from typing import Any
 
 
@@ -178,29 +179,157 @@ class PreprocessedGTFS:
         return {
             "source_dir": self.source_dir,
             "generated_at": self.generated_at,
-            "routes": {key: asdict(value) for key, value in self.routes.items()},
-            "services": {key: asdict(value) for key, value in self.services.items()},
-            "stations": {key: asdict(value) for key, value in self.stations.items()},
-            "stops": {key: asdict(value) for key, value in self.stops.items()},
-            "trips": {key: asdict(value) for key, value in self.trips.items()},
-            "connections": [asdict(value) for value in self.connections],
-            "transfers": [asdict(value) for value in self.transfers],
+            "routes": {
+                key: {
+                    "route_id": value.route_id,
+                    "route_short_name": value.route_short_name,
+                    "route_color": value.route_color,
+                }
+                for key, value in self.routes.items()
+            },
+            "stations": {
+                key: {
+                    "station_id": value.station_id,
+                    "name": value.name,
+                    "lat": value.lat,
+                    "lon": value.lon,
+                }
+                for key, value in self.stations.items()
+            },
+            "stops": {
+                key: {
+                    "stop_id": value.stop_id,
+                    "name": value.name,
+                    "lat": value.lat,
+                    "lon": value.lon,
+                    "parent_station": value.parent_station,
+                }
+                for key, value in self.stops.items()
+            },
+            "trips": {
+                key: {
+                    "trip_id": value.trip_id,
+                    "route_id": value.route_id,
+                    "direction_id": value.direction_id,
+                }
+                for key, value in self.trips.items()
+            },
+            "connections": [
+                {
+                    "trip_id": value.trip_id,
+                    "route_id": value.route_id,
+                    "from_stop_id": value.from_stop_id,
+                    "to_stop_id": value.to_stop_id,
+                    "from_stop_sequence": value.from_stop_sequence,
+                    "to_stop_sequence": value.to_stop_sequence,
+                    "departure_time": value.departure_time,
+                    "arrival_time": value.arrival_time,
+                    "duration": value.duration,
+                }
+                for value in self.connections
+            ],
+            "transfers": [
+                {
+                    "from_stop_id": value.from_stop_id,
+                    "to_stop_id": value.to_stop_id,
+                    "min_transfer_time": value.min_transfer_time,
+                }
+                for value in self.transfers
+            ],
             "stop_to_station": dict(self.stop_to_station),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PreprocessedGTFS":
+        routes = {
+            key: RouteInfo(
+                route_id=value["route_id"],
+                route_short_name=value["route_short_name"],
+                route_long_name=value.get("route_long_name"),
+                route_type=value.get("route_type", METRO_TYPE),
+                route_color=value.get("route_color"),
+                route_text_color=value.get("route_text_color"),
+            )
+            for key, value in data.get("routes", {}).items()
+        }
+
+        stations = {
+            key: StationGroup(
+                station_id=value["station_id"],
+                name=value["name"],
+                lat=value["lat"],
+                lon=value["lon"],
+                platform_stop_ids=list(value.get("platform_stop_ids", [])),
+            )
+            for key, value in data.get("stations", {}).items()
+        }
+
+        stops = {
+            key: StopInfo(
+                stop_id=value["stop_id"],
+                name=value["name"],
+                lat=value["lat"],
+                lon=value["lon"],
+                parent_station=value.get("parent_station"),
+                location_type=value.get("location_type"),
+                platform_code=value.get("platform_code"),
+                wheelchair_boarding=value.get("wheelchair_boarding"),
+            )
+            for key, value in data.get("stops", {}).items()
+        }
+
+        trips = {
+            key: TripInfo(
+                trip_id=value["trip_id"],
+                route_id=value["route_id"],
+                service_id=value.get("service_id", ""),
+                trip_headsign=value.get("trip_headsign"),
+                direction_id=value.get("direction_id"),
+                block_id=value.get("block_id"),
+                shape_id=value.get("shape_id"),
+            )
+            for key, value in data.get("trips", {}).items()
+        }
+
+        connections = [
+            TimetableConnection(
+                trip_id=value["trip_id"],
+                route_id=value["route_id"],
+                service_id=value.get("service_id", ""),
+                from_stop_id=value["from_stop_id"],
+                to_stop_id=value["to_stop_id"],
+                from_stop_sequence=value["from_stop_sequence"],
+                to_stop_sequence=value["to_stop_sequence"],
+                departure_time=value["departure_time"],
+                arrival_time=value["arrival_time"],
+                duration=value["duration"],
+            )
+            for value in data.get("connections", [])
+        ]
+
+        transfers = [
+            TransferInfo(
+                from_stop_id=value["from_stop_id"],
+                to_stop_id=value["to_stop_id"],
+                min_transfer_time=value["min_transfer_time"],
+                transfer_type=value.get("transfer_type"),
+                from_route_id=value.get("from_route_id"),
+                to_route_id=value.get("to_route_id"),
+            )
+            for value in data.get("transfers", [])
+        ]
+
         return cls(
-            source_dir=data["source_dir"],
-            generated_at=data["generated_at"],
-            routes={key: RouteInfo(**value) for key, value in data["routes"].items()},
-            services={key: ServiceCalendar(**value) for key, value in data["services"].items()},
-            stations={key: StationGroup(**value) for key, value in data["stations"].items()},
-            stops={key: StopInfo(**value) for key, value in data["stops"].items()},
-            trips={key: TripInfo(**value) for key, value in data["trips"].items()},
-            connections=[TimetableConnection(**value) for value in data["connections"]],
-            transfers=[TransferInfo(**value) for value in data["transfers"]],
-            stop_to_station=dict(data["stop_to_station"]),
+            source_dir=data.get("source_dir", ""),
+            generated_at=data.get("generated_at", ""),
+            routes=routes,
+            services={key: ServiceCalendar(**value) for key, value in data.get("services", {}).items()},
+            stations=stations,
+            stops=stops,
+            trips=trips,
+            connections=connections,
+            transfers=transfers,
+            stop_to_station=dict(data.get("stop_to_station", {})),
         )
 
 
@@ -459,13 +588,22 @@ def preprocess_gtfs(data_dir: str, route_types: set[str] = KEPT_ROUTE_TYPES) -> 
 def save_preprocessed_gtfs(data: PreprocessedGTFS, output_path: str | Path) -> Path:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(data.to_dict(), file, ensure_ascii=True, indent=2)
+    dump_kwargs = dict(ensure_ascii=False, separators=(",", ":"))
+    # If output ends with .gz or caller requests .gz by passing a .gz filename, write gzipped text
+    if str(path).endswith('.gz'):
+        with gzip.open(path, "wt", encoding="utf-8") as file:
+            json.dump(data.to_dict(), file, **dump_kwargs)
+    else:
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(data.to_dict(), file, **dump_kwargs)
     return path
 
 
 def load_preprocessed_gtfs(input_path: str | Path) -> PreprocessedGTFS:
     path = Path(input_path)
+    if str(path).endswith('.gz'):
+        with gzip.open(path, "rt", encoding="utf-8") as file:
+            return PreprocessedGTFS.from_dict(json.load(file))
     with path.open(encoding="utf-8") as file:
         return PreprocessedGTFS.from_dict(json.load(file))
 
