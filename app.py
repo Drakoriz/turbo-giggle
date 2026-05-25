@@ -6,8 +6,8 @@ from preprocess import load_preprocessed_gtfs
 from graph.models import Graph
 from graph.algorithms import is_connected, kruskal, dijkstra_v3
 
-st.set_page_config(page_title="Metro Paris", layout="wide")
-st.title("Metro Paris")
+st.set_page_config(page_title="Métro Paris", layout="wide")
+st.title("Métro Paris")
 
 @st.cache_resource(show_spinner="Chargement du graphe...")
 def load_graph():
@@ -20,7 +20,7 @@ def load_graph():
 
 g = load_graph()
 
-station_options = sorted((f"{s.name} ({sid})", sid) for sid, s in g.stations.items())
+station_options = sorted((s.name, sid) for sid, s in g.stations.items())
 station_labels = [label for label, _ in station_options]
 label_to_id = dict(station_options)
 
@@ -106,7 +106,7 @@ def build_map(g, highlight_path=None, highlight_acpm=None, acpm_steps=None):
     return fig
 
 
-tab1, tab2, tab3, tab4 = st.tabs(["Reseau", "Itineraire", "ACPM", "Connexite"])
+tab1, tab2, tab3, tab4 = st.tabs(["Réseau", "Itinéraire", "ACPM", "Connexité"])
 
 with tab1:
     st.plotly_chart(build_map(g), use_container_width=True, key="full_map")
@@ -131,7 +131,7 @@ with tab2:
                 if details[0]['wait'] - dep_sec > 3600:
                     st.warning("Premier départ dans plus d'une heure.")
                 total = arrival - dep_sec
-                st.success(f"Arrivée : **{sec_to_hhmm(arrival)}** — Durée : **{total // 60} min**")
+                st.success(f"Arrivée : **{sec_to_hhmm(arrival)}** - Durée : **{total // 60} min**")
 
                 segments = []
                 cur = None
