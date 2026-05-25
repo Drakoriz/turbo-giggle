@@ -130,9 +130,41 @@ with tab2:
                 total = arrival - dep_sec
                 st.success(f"Arrivée : **{sec_to_hhmm(arrival)}** — Durée : **{total // 60} min**")
 
+                segments = []
+                cur = None
                 for d in details:
-                    wait_str = f" *(attente {d['wait'] // 60} min)*" if d['wait'] > 60 else ""
-                    st.write(f"**{d['line']}** {d['from_name']} `{sec_to_hhmm(d['departure'])}` -> {d['to_name']} `{sec_to_hhmm(d['arrival'])}`{wait_str}")
+                    if d.get('kind') != 'ride':
+                        continue
+                    line = d.get('line')
+                    if cur is None:
+                        cur = {
+                            'line': line,
+                            'from_name': d['from_name'],
+                            'to_name': d['to_name'],
+                            'departure': d['departure'],
+                            'arrival': d['arrival'],
+                        }
+                    elif line == cur['line']:
+                        cur['to_name'] = d['to_name']
+                        cur['arrival'] = d['arrival']
+                    else:
+                        segments.append(cur)
+                        cur = {
+                            'line': line,
+                            'from_name': d['from_name'],
+                            'to_name': d['to_name'],
+                            'departure': d['departure'],
+                            'arrival': d['arrival'],
+                        }
+                if cur is not None:
+                    segments.append(cur)
+
+                if not segments:
+                    st.info("Aucun segment de trajet trouvé.")
+                else:
+                    for s in segments:
+                        mins = max(0, int(s['arrival']) - int(s['departure'])) // 60
+                        st.write(f"{s['line']} - {s['from_name']} ({sec_to_hhmm(s['departure'])}) -> {s['to_name']} ({sec_to_hhmm(s['arrival'])}) - ({mins}min)")
                 st.plotly_chart(build_map(g, highlight_path=path), use_container_width=True, key="path_map")
 
 with tab3:
