@@ -1,6 +1,7 @@
 # Project data and generated artifacts
 GTFS/
 GTFS_preprocessed.json
+GTFS_preprocessed.json.gz
 *.zip
 *.pdf
 .vscode/
