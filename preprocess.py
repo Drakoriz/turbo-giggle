@@ -41,6 +41,7 @@ def _is_kept_route(row: dict[str, str], route_types: set[str]) -> bool:
     route_type = row.get("route_type", "").strip()
     if route_type not in route_types:
         return False
+
     if route_type != "2":
         return True
 
@@ -48,14 +49,10 @@ def _is_kept_route(row: dict[str, str], route_types: set[str]) -> bool:
     long_name = (row.get("route_long_name") or "").strip().upper()
     desc = (row.get("route_desc") or "").strip().upper()
 
-    return not (
-        short_name.startswith(TER_PREFIX)
-        or long_name.startswith(TER_PREFIX)
-        or desc.startswith(TER_PREFIX)
-        or short_name in RER_NAMES
-        or long_name in RER_NAMES
-        or desc in RER_NAMES
-    )
+    if short_name.startswith(TER_PREFIX) or long_name.startswith(TER_PREFIX) or desc.startswith(TER_PREFIX):
+        return False
+
+    return bool(short_name) and short_name[0] in RER_NAMES
 
 
 @dataclass(frozen=True)
